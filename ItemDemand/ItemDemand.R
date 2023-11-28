@@ -166,7 +166,7 @@ es_model <- exp_smoothing() %>%
 cv_results <- modeltime_calibrate(es_model,
                                   new_data = testing(cv_split))
 
-## Visualize CV results9
+## Visualize CV results
 p3 <- cv_results %>%
   modeltime_forecast(
     new_data = testing(cv_split),
@@ -195,6 +195,134 @@ p4 <- es_fullfit %>%
   modeltime_forecast(h = "3 months", actual_data = train) %>%
   plot_modeltime_forecast(.interactive=FALSE)
 
+
+plotly::subplot(p1,p3,p2,p4, nrows=2)
+
+##############################################################
+#SARIMA
+
+train <- itemtrain %>% filter(store==1, item==1)
+test <- itemtest %>% filter(store==1, item==1)
+cv_split <- time_series_split(train, assess="3 months", cumulative = TRUE)
+#cv_split %>%
+ # tk_time_series_cv_plan() %>% #Put into a data frame
+#plot_time_series_cv_plan(date, sales, .interactive=FALSE)
+
+arima_recipe <- recipe(sales ~ ., data = storeItem) %>%
+  step_date(date, features="dow") %>%
+  step_date(date, features="month") %>%
+  step_date(date, features ="decimal") %>%
+  step_date(date, features = "year") %>%
+  #step_rm(store, item) %>%
+  step_date(date, features="doy") %>%
+  #step_range(date_doy, min = 0, max=pi) %>%
+  #step_mutate(sinDOY = sin(date_doy), cosDOY=cos(date_doy)) %>%
+  step_holiday(date, holidays = "ChristmasDay") # For the linear model part
+
+arima_model <- arima_reg(seasonal_period=365,
+                         non_seasonal_ar=10, # default max p to tune
+                         non_seasonal_ma=10, # default max q to tune
+                         seasonal_ar=10, # default max P to tune
+                         seasonal_ma=10, #default max Q to tune
+                         non_seasonal_differences=10, # default max d to tune
+                         seasonal_differences=10 #default max D to tune
+) %>%
+set_engine("auto_arima")
+
+
+arima_wf <- workflow() %>%
+add_recipe(arima_recipe) %>%
+add_model(arima_model) %>%
+fit(data=training(cv_split))
+
+## Calibrate (i.e. tune) workflow
+cv_results <- modeltime_calibrate(arima_wf,
+                                  new_data = testing(cv_split))
+
+## Visualize & Evaluate CV accuracy
+p1 <- cv_results %>%
+  modeltime_forecast(
+    new_data = testing(cv_split),
+    actual_data = train
+  ) %>%
+  plot_modeltime_forecast(.interactive=TRUE)
+
+cv_results %>%
+  modeltime_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE
+  )
+
+## Refit best model to entire data and predict
+
+
+ar_fullfit <- cv_results %>%
+  modeltime_refit(data = train)
+p2 <- ar_fullfit %>%
+  modeltime_forecast(new_data=test, actual_data = train) %>%
+  plot_modeltime_forecast(.interactive=FALSE)
+ 
+
+train <- itemtrain %>% filter(store==7, item==16)
+test <- itemtest %>% filter(store==7, item==16)
+cv_split <- time_series_split(train, assess="3 months", cumulative = TRUE)
+#cv_split %>%
+# tk_time_series_cv_plan() %>% #Put into a data frame
+#plot_time_series_cv_plan(date, sales, .interactive=FALSE)
+
+arima_recipe <- recipe(sales ~ ., data = storeItem) %>%
+  step_date(date, features="dow") %>%
+  step_date(date, features="month") %>%
+  step_date(date, features ="decimal") %>%
+  step_date(date, features = "year") %>%
+  #step_rm(store, item) %>%
+  step_date(date, features="doy") %>%
+  #step_range(date_doy, min = 0, max=pi) %>%
+  #step_mutate(sinDOY = sin(date_doy), cosDOY=cos(date_doy)) %>%
+  step_holiday(date, holidays = "ChristmasDay") # For the linear model part
+
+arima_model <- arima_reg(seasonal_period=365,
+                         non_seasonal_ar=10, # default max p to tune
+                         non_seasonal_ma=10, # default max q to tune
+                         seasonal_ar=10, # default max P to tune
+                         seasonal_ma=10, #default max Q to tune
+                         non_seasonal_differences=10, # default max d to tune
+                         seasonal_differences=10 #default max D to tune
+) %>%
+  set_engine("auto_arima")
+
+
+arima_wf <- workflow() %>%
+  add_recipe(arima_recipe) %>%
+  add_model(arima_model) %>%
+  fit(data=training(cv_split))
+
+## Calibrate (i.e. tune) workflow
+cv_results <- modeltime_calibrate(arima_wf,
+                                  new_data = testing(cv_split))
+
+## Visualize & Evaluate CV accuracy
+p3 <- cv_results %>%
+  modeltime_forecast(
+    new_data = testing(cv_split),
+    actual_data = train
+  ) %>%
+  plot_modeltime_forecast(.interactive=TRUE)
+
+cv_results %>%
+  modeltime_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE
+  )
+
+## Refit best model to entire data and predict
+
+
+ar_fullfit <- cv_results %>%
+  modeltime_refit(data = train)
+p4 <- ar_fullfit %>%
+  modeltime_forecast(new_data=test, actual_data = train) %>%
+  plot_modeltime_forecast(.interactive=FALSE)
 
 plotly::subplot(p1,p3,p2,p4, nrows=2)
 
